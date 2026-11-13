@@ -1,0 +1,6 @@
+{
+  "name": "QuestCounter.EditModeTests",
+  "references": ["QuestCounter.Runtime"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

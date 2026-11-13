@@ -1,0 +1,5 @@
+{
+  "name": "QuestCounter.Editor",
+  "references": ["QuestCounter.Runtime", "Unity.XR.Management", "Unity.XR.Management.Editor", "Unity.XR.Oculus"],
+  "includePlatforms": ["Editor"]
+}
