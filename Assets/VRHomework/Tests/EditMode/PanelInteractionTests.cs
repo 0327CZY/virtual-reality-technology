@@ -83,6 +83,10 @@ public class PanelInteractionTests
         RayButton button = panel.Buttons[0];
         Vector3 colliderPosition = button.transform.position;
         Vector3 capBefore = button.Cap.position;
+        Mesh socket = button.GetComponentInChildren<MeshFilter>().sharedMesh;
+        float opening = socket.bounds.min.z;
+        float capHalfDepth = CurvedButtonPanel.KeyThickness / 2f;
+        Assert.Less(button.Cap.localPosition.z - capHalfDepth, opening);
         Vector3 aim = (colliderPosition - EyePosition).normalized;
         RaycastHit hit;
 
@@ -98,6 +102,8 @@ public class PanelInteractionTests
         Vector3 expected = capBefore + button.transform.forward * 0.025f;
         Assert.Less(Vector3.Distance(expected, button.Cap.position), 0.00001f);
         Assert.AreEqual(colliderPosition, button.transform.position);
+        Assert.Greater(button.Cap.localPosition.z - capHalfDepth, opening);
+        Assert.Less(button.Cap.localPosition.z + capHalfDepth, socket.bounds.max.z);
 
         // 凹陷之后射线仍能命中同一个按键，才可以再点一次松开。
         Physics.SyncTransforms();

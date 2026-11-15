@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace QuestCounter
 {
@@ -15,17 +16,14 @@ namespace QuestCounter
         // 曲面和按键尺寸，单位都是米。
         public const float Radius = 2f;
         public const float CenterHeight = 1.65f;   // 面板中心高度，约等于眼睛高度
-        public const float KeyWidth = 0.064f;
-        public const float KeyHeight = 0.052f;
+        public const float KeyWidth = 0.056f;
+        public const float KeyHeight = 0.044f;
         public const float KeyThickness = 0.024f;
-        public const float Gap = 0.002f;
-
-        // 底座比键帽略大、略靠后。按下的键帽会沉进底座，看起来是凹下去的。
-        private static readonly Vector3 SocketOffset = new Vector3(0f, 0f, 0.055f);
-        private static readonly Vector3 SocketSize = new Vector3(0.065f, 0.053f, 0.08f);
+        public const float Gap = 0.010f;
 
         private PanelMaterials materials;
         private CounterBoard counter;
+        private Mesh socketMesh;
 
         public RayButton[] Buttons { get; private set; }
         public int PressedCount { get; private set; }
@@ -35,6 +33,10 @@ namespace QuestCounter
             materials = palette;
             counter = board;
             Buttons = new RayButton[TotalCount];
+            if (socketMesh == null)
+            {
+                socketMesh = CreateSocketMesh();
+            }
 
             float columnPitch = KeyWidth + Gap;
             float rowPitch = KeyHeight + Gap;
@@ -75,7 +77,13 @@ namespace QuestCounter
             BoxCollider hitBox = anchor.AddComponent<BoxCollider>();
             hitBox.size = new Vector3(KeyWidth, KeyHeight, KeyThickness);
 
-            ScenePrimitives.Box("Socket", anchor.transform, SocketOffset, SocketSize, materials.Shell);
+            GameObject socket = new GameObject("Recessed socket");
+            socket.transform.SetParent(anchor.transform, false);
+            socket.AddComponent<MeshFilter>().sharedMesh = socketMesh;
+            MeshRenderer socketRenderer = socket.AddComponent<MeshRenderer>();
+            socketRenderer.sharedMaterial = materials.Shell;
+            socketRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            socketRenderer.receiveShadows = false;
             GameObject cap = ScenePrimitives.Box(
                 "Moving cap", anchor.transform, Vector3.zero,
                 new Vector3(KeyWidth, KeyHeight, KeyThickness), materials.Released);
@@ -83,6 +91,68 @@ namespace QuestCounter
             RayButton button = anchor.AddComponent<RayButton>();
             button.Setup(this, row, column, cap.transform, materials);
             return button;
+        }
+
+        private void OnDestroy()
+        {
+            if (socketMesh != null)
+            {
+                ScenePrimitives.DestroyObject(socketMesh);
+            }
+        }
+
+        private static Mesh CreateSocketMesh()
+        {
+            // 槽口前沿在 z = 0。松开时键帽面突出 12 mm，按下时沉到槽口后方 13 mm。
+            // 槽底在按下的键帽之后，带斜面的槽壁给键帽留出空间。
+            const float back = 0.041f;
+            Vector3[] rim = SocketCorners(Gap * 0.95f, 0f);
+            Vector3[] opening = SocketCorners(Gap * 0.68f, 0f);
+            Vector3[] floor = SocketCorners(Gap * 0.32f, back);
+            Vector3[] outerBack = SocketCorners(Gap * 0.95f, back);
+            Vector3[] vertices = new Vector3[52];
+            int[] triangles = new int[78];
+            int face = 0;
+            for (int side = 0; side < 4; side++)
+            {
+                int next = (side + 1) % 4;
+                AddQuad(vertices, triangles, face++, rim[side], opening[side], opening[next], rim[next]);
+                AddQuad(vertices, triangles, face++, opening[side], floor[side], floor[next], opening[next]);
+                AddQuad(vertices, triangles, face++, rim[side], rim[next], outerBack[next], outerBack[side]);
+            }
+            AddQuad(vertices, triangles, face, floor[3], floor[2], floor[1], floor[0]);
+
+            Mesh mesh = new Mesh { name = "Shared button socket", vertices = vertices, triangles = triangles };
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
+        private static Vector3[] SocketCorners(float clearance, float z)
+        {
+            float x = (KeyWidth + clearance) * 0.5f;
+            float y = (KeyHeight + clearance) * 0.5f;
+            return new[]
+            {
+                new Vector3(-x, -y, z), new Vector3(x, -y, z),
+                new Vector3(x, y, z), new Vector3(-x, y, z)
+            };
+        }
+
+        private static void AddQuad(Vector3[] vertices, int[] triangles, int face,
+            Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            int vertex = face * 4;
+            vertices[vertex] = a;
+            vertices[vertex + 1] = b;
+            vertices[vertex + 2] = c;
+            vertices[vertex + 3] = d;
+            int index = face * 6;
+            triangles[index] = vertex;
+            triangles[index + 1] = vertex + 1;
+            triangles[index + 2] = vertex + 2;
+            triangles[index + 3] = vertex;
+            triangles[index + 4] = vertex + 2;
+            triangles[index + 5] = vertex + 3;
         }
 
         // 某个按键切换状态后由它调用：按下 +1，松开 -1，然后刷新计数板。
